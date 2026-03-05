@@ -1,6 +1,13 @@
 import CommonTextInput from "@/src/components/CommonTextInput";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LoginApi } from "@/src/hooks/request";
-import { heightPixel, isValidPassword, widthPixel } from "@/src/utils/Helper";
+import { extractTokenFields, setAuthTokens } from "@/src/store/authTokens";
+import {
+  heightPixel,
+  isValidEmail,
+  isValidPassword,
+  widthPixel,
+} from "@/src/utils/Helper";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -16,9 +23,11 @@ import {
 } from "react-native";
 
 type LoginFormValues = {
-  username: string;
+  email: string;
   password: string;
 };
+
+const USER_EMAIL_KEY = "@learnhub/user_email";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -32,7 +41,7 @@ export default function LoginScreen() {
     formState: { isValid, isSubmitting },
   } = useForm<LoginFormValues>({
     defaultValues: {
-      username: "",
+      email: "",
       password: "",
     },
     mode: "onChange",
@@ -40,15 +49,36 @@ export default function LoginScreen() {
 
   const onSubmit: SubmitHandler<LoginFormValues> = async (values) => {
     setApiError("");
+
     try {
-      let loginBody = {
-        username: values.username.trim(),
+      const loginBody = {
+        email: values.email.trim(),
         password: values.password,
       };
+
       const response = await LoginApi(loginBody);
-      console.log(JSON.stringify(response?.data?.data?.user));
+      const tokenFields = extractTokenFields(response?.data);
+
+      if (!tokenFields?.accessToken || !tokenFields?.refreshToken) {
+        setApiError("Token data missing in login response.");
+        return;
+      }
+
+      await setAuthTokens({
+        accessToken: tokenFields.accessToken,
+        refreshToken: tokenFields.refreshToken,
+      });
+      await AsyncStorage.setItem(USER_EMAIL_KEY, loginBody.email);
+
       router.replace("/(tabs)/home");
     } catch (error: any) {
+      const status = error?.response?.status;
+
+      if (status === 401) {
+        setApiError("Invalid email or password.");
+        return;
+      }
+
       const message =
         error?.response?.data?.message ||
         "Unable to sign in. Please try again.";
@@ -84,16 +114,16 @@ export default function LoginScreen() {
             <View style={styles.form}>
               <CommonTextInput
                 control={control}
-                name="username"
+                name="email"
                 rules={{
-                  validate: (value) =>
-                    value?.trim() ? true : "Username is required",
+                  validate: (value) => isValidEmail(value) || true,
                 }}
-                label="USERNAME"
-                icon="person-outline"
+                label="EMAIL"
+                icon="mail-outline"
+                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                placeholder="Enter your username"
+                placeholder="name@example.com"
               />
 
               <CommonTextInput

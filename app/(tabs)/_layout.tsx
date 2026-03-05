@@ -1,7 +1,23 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
+import { ActivityIndicator, View } from "react-native";
+import { useAuthStatus } from "@/src/hooks/useAuthStatus";
 
 export default function TabsLayout() {
+  const { isLoading, hasToken } = useAuthStatus();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!hasToken) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   return (
     <Tabs
       screenOptions={({ route }) => ({
@@ -13,12 +29,14 @@ export default function TabsLayout() {
           paddingBottom: 8,
         },
         tabBarIcon: ({ color, size }) => {
-          let iconName;
-
-          if (route.name === "home") iconName = "home";
-          else if (route.name === "search") iconName = "search";
-          else if (route.name === "myCourses") iconName = "book";
-          else if (route.name === "profile") iconName = "person";
+          const iconName: keyof typeof Ionicons.glyphMap =
+            route.name === "home"
+              ? "home"
+              : route.name === "search"
+                ? "search"
+                : route.name === "myCourses"
+                  ? "book"
+                  : "person";
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -28,6 +46,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="search" options={{ title: "Search" }} />
       <Tabs.Screen name="myCourses" options={{ title: "My Courses" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+      <Tabs.Screen name="bookmarks" options={{ href: null }} />
     </Tabs>
   );
 }
