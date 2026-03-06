@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Control, Controller, RegisterOptions } from "react-hook-form";
+import { useAppTheme } from "../theme/useAppTheme";
 import {
   Pressable,
   StyleSheet,
@@ -41,6 +42,8 @@ const CommonTextInput: React.FC<CommonTextInputProps> = ({
   onTogglePassword,
   ...rest
 }) => {
+  const { colors } = useAppTheme();
+
   const renderInput = (
     inputProps: TextInputProps,
     resolvedError?: string,
@@ -52,16 +55,21 @@ const CommonTextInput: React.FC<CommonTextInputProps> = ({
       <View style={styles.container}>
         <View style={styles.labelRow}>
           {required && <View style={styles.requiredDot} />}
-          <Text style={styles.label}>{label}</Text>
+          <Text style={[styles.label, { color: colors.textMuted }]}>{label}</Text>
         </View>
 
-        <View style={styles.inputWrap}>
-          <Ionicons name={icon} size={16} color="#97A3B8" />
+        <View
+          style={[
+            styles.inputWrap,
+            { borderColor: colors.inputBorder, backgroundColor: colors.inputBg },
+          ]}
+        >
+          <Ionicons name={icon} size={16} color={colors.textMuted} />
 
           <TextInput
             {...inputProps}
-            style={styles.input}
-            placeholderTextColor="#BCC4D3"
+            style={[styles.input, { color: colors.textSecondary }]}
+            placeholderTextColor={colors.textMuted}
           />
 
           {showPasswordToggle && (
@@ -69,7 +77,7 @@ const CommonTextInput: React.FC<CommonTextInputProps> = ({
               <Ionicons
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
                 size={18}
-                color="#97A3B8"
+                color={colors.textMuted}
               />
             </Pressable>
           )}
@@ -119,7 +127,6 @@ const styles = StyleSheet.create({
     marginBottom: heightPixel(8),
   },
   label: {
-    color: "#9AA5B7",
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 1.1,
@@ -135,8 +142,6 @@ const styles = StyleSheet.create({
     height: heightPixel(48),
     borderRadius: widthPixel(16),
     borderWidth: 1,
-    borderColor: "#E5E9F0",
-    backgroundColor: "#EEF1F5",
     paddingHorizontal: widthPixel(12),
     flexDirection: "row",
     alignItems: "center",
@@ -145,7 +150,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    color: "#4E5D77",
     fontWeight: "500",
   },
   errorText: {

@@ -1,14 +1,17 @@
 import axios from "axios";
 import { router } from "expo-router";
 import {
+  extractTokenFields,
   getAccessToken,
   getRefreshToken,
   logoutUser,
   saveAccessToken,
+  saveRefreshToken,
 } from "../store/authTokens";
 
 const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 const baseURL = configuredBaseUrl;
+const loginPath = "/api/auth/login";
 const refreshPath = "/api/auth/refresh-token";
 
 export const apiClient = axios.create({
@@ -28,15 +31,37 @@ const handleLogout = async () => {
 
 const isAuthRequest = (url?: string) => {
   if (!url) return false;
-  const normalized = url.toLowerCase();
+  const normalized = url.toLowerCase().trim();
+
+  if (normalized === loginPath || normalized === refreshPath) {
+    return true;
+  }
+
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    try {
+      const parsed = new URL(normalized);
+      return parsed.pathname === loginPath || parsed.pathname === refreshPath;
+    } catch {
+      return false;
+    }
+  }
+
+  const withLeadingSlash = normalized.startsWith("/")
+    ? normalized
+    : `/${normalized}`;
+
   return (
-    normalized.includes("/api/auth/login") ||
-    normalized.includes(refreshPath.toLowerCase())
+    withLeadingSlash.startsWith(loginPath) ||
+    withLeadingSlash.startsWith(refreshPath)
   );
 };
 
 apiClient.interceptors.request.use(
   async (config) => {
+    if (isAuthRequest(config.url)) {
+      return config;
+    }
+
     const accessToken = await getAccessToken();
 
     if (accessToken) {
@@ -74,11 +99,14 @@ apiClient.interceptors.response.use(
           return Promise.reject(error);
         }
 
-        const response = await axios.post(`${baseURL}${refreshPath}`, {
+        const refreshUrl = baseURL ? `${baseURL}${refreshPath}` : refreshPath;
+
+        const response = await axios.post(refreshUrl, {
           refreshToken: refreshToken,
         });
 
-        const newAccessToken = response?.data?.accessToken;
+        const refreshedTokens = extractTokenFields(response?.data);
+        const newAccessToken = refreshedTokens?.accessToken;
 
         if (!newAccessToken) {
           await handleLogout();
@@ -86,6 +114,9 @@ apiClient.interceptors.response.use(
         }
 
         await saveAccessToken(newAccessToken);
+        if (refreshedTokens?.refreshToken) {
+          await saveRefreshToken(refreshedTokens.refreshToken);
+        }
 
         originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;

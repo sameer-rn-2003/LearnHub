@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
 const BOOKMARK_REMINDER_ID_KEY = "@learnhub/bookmark_reminder_notification_id";
+const COURSE_REMINDER_KEY_PREFIX = "@learnhub/course_reminder_notification_id:";
 
 let isInitialized = false;
 
@@ -69,4 +70,45 @@ export const scheduleBookmarkReminderAfter24Hours = async () => {
   });
 
   await AsyncStorage.setItem(BOOKMARK_REMINDER_ID_KEY, notificationId);
+};
+
+const getCourseReminderStorageKey = (courseId: string) =>
+  `${COURSE_REMINDER_KEY_PREFIX}${courseId}`;
+
+export const clearIncompleteCourseReminder = async (courseId: string) => {
+  const reminderKey = getCourseReminderStorageKey(courseId);
+  const reminderId = await AsyncStorage.getItem(reminderKey);
+  if (!reminderId) return;
+
+  try {
+    await Notifications.cancelScheduledNotificationAsync(reminderId);
+  } catch {}
+
+  await AsyncStorage.removeItem(reminderKey);
+};
+
+export const scheduleIncompleteCourseReminder = async (
+  courseId: string,
+  courseTitle: string,
+) => {
+  const allowed = await initializeNotifications();
+  if (!allowed) return;
+
+  await clearIncompleteCourseReminder(courseId);
+
+  const notificationId = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "Course Reminder",
+      body: `Continue "${courseTitle}" from where you paused.`,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 4 * 60 * 60,
+    },
+  });
+
+  await AsyncStorage.setItem(
+    getCourseReminderStorageKey(courseId),
+    notificationId,
+  );
 };

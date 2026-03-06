@@ -1,7 +1,7 @@
 import CommonTextInput from "@/src/components/CommonTextInput";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LoginApi } from "@/src/hooks/request";
 import { extractTokenFields, setAuthTokens } from "@/src/store/authTokens";
+import { useAppTheme } from "@/src/theme/useAppTheme";
 import {
   heightPixel,
   isValidEmail,
@@ -9,6 +9,7 @@ import {
   widthPixel,
 } from "@/src/utils/Helper";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { SubmitHandler, useForm } from "react-hook-form";
@@ -31,6 +32,7 @@ const USER_EMAIL_KEY = "@learnhub/user_email";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { colors } = useAppTheme();
 
   const [showPassword, setShowPassword] = useState(false);
   const [apiError, setApiError] = useState("");
@@ -49,27 +51,23 @@ export default function LoginScreen() {
 
   const onSubmit: SubmitHandler<LoginFormValues> = async (values) => {
     setApiError("");
-
     try {
       const loginBody = {
         email: values.email.trim(),
         password: values.password,
       };
-
       const response = await LoginApi(loginBody);
       const tokenFields = extractTokenFields(response?.data);
-
+      console.log("response:::::", response);
       if (!tokenFields?.accessToken || !tokenFields?.refreshToken) {
         setApiError("Token data missing in login response.");
         return;
       }
-
       await setAuthTokens({
         accessToken: tokenFields.accessToken,
         refreshToken: tokenFields.refreshToken,
       });
       await AsyncStorage.setItem(USER_EMAIL_KEY, loginBody.email);
-
       router.replace("/(tabs)/home");
     } catch (error: any) {
       const status = error?.response?.status;
@@ -87,7 +85,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -99,14 +97,29 @@ export default function LoginScreen() {
           contentInsetAdjustmentBehavior="automatic"
           contentContainerStyle={styles.scrollContainer}
         >
-          <View style={styles.card}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.surface,
+                shadowColor: colors.accentStrong,
+              },
+            ]}
+          >
             <View style={styles.logoWrap}>
-              <View style={styles.logoBox}>
+              <View
+                style={[
+                  styles.logoBox,
+                  { backgroundColor: colors.accentStrong },
+                ]}
+              >
                 <Ionicons name="school" size={heightPixel(24)} color="#fff" />
               </View>
 
-              <Text style={styles.title}>LearnHub</Text>
-              <Text style={styles.subtitle}>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>
+                LearnHub
+              </Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
                 Continue your learning journey
               </Text>
             </View>
@@ -153,6 +166,10 @@ export default function LoginScreen() {
                 disabled={!isValid || isSubmitting}
                 style={[
                   styles.signInButton,
+                  {
+                    backgroundColor: colors.accentStrong,
+                    shadowColor: colors.accentStrong,
+                  },
                   (!isValid || isSubmitting) && styles.signInButtonDisabled,
                 ]}
               >
@@ -176,11 +193,9 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   card: {
     borderRadius: widthPixel(28),
-    backgroundColor: "#FFFFFF",
     paddingHorizontal: widthPixel(28),
     paddingTop: heightPixel(48),
     paddingBottom: heightPixel(32),
-    shadowColor: "#4F46E5",
     shadowOffset: { width: 0, height: heightPixel(10) },
     shadowOpacity: 0.15,
     shadowRadius: heightPixel(25),
@@ -194,7 +209,6 @@ const styles = StyleSheet.create({
 
   screen: {
     flex: 1,
-    backgroundColor: "#EEF2FF",
   },
 
   scrollContainer: {
@@ -214,19 +228,16 @@ const styles = StyleSheet.create({
     borderRadius: widthPixel(18),
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#4F46E5",
     marginBottom: heightPixel(16),
   },
 
   title: {
     fontSize: heightPixel(30),
     fontWeight: "800",
-    color: "#111827",
   },
 
   subtitle: {
     fontSize: heightPixel(14),
-    color: "#6B7280",
     marginTop: heightPixel(6),
   },
 
@@ -238,12 +249,10 @@ const styles = StyleSheet.create({
     marginTop: heightPixel(24),
     height: heightPixel(54),
     borderRadius: widthPixel(28),
-    backgroundColor: "#4F46E5",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: widthPixel(8),
-    shadowColor: "#4F46E5",
     shadowOffset: { width: 0, height: heightPixel(8) },
     shadowOpacity: 0.3,
     shadowRadius: heightPixel(15),
@@ -251,7 +260,7 @@ const styles = StyleSheet.create({
   },
 
   signInButtonDisabled: {
-    backgroundColor: "#A5B4FC",
+    backgroundColor: "#8FA9E4",
   },
 
   signInText: {

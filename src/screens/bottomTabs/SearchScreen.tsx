@@ -3,6 +3,7 @@ import {
   ProductWithCategories,
 } from "@/src/hooks/request";
 import { useBookmarks } from "@/src/store/bookmarks";
+import { useAppTheme } from "@/src/theme/useAppTheme";
 import { heightPixel, widthPixel } from "@/src/utils/Helper";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -25,12 +26,12 @@ const formatPrice = (price: number) => `Rs. ${price.toFixed(2)}`;
 
 export default function SearchScreen() {
   const router = useRouter();
+  const { colors } = useAppTheme();
   const { bookmarkedIds, toggleBookmark } = useBookmarks();
 
   const [products, setProducts] = useState<ProductWithCategories[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
   const [query, setQuery] = useState("");
 
   const fetchProducts = useCallback(async () => {
@@ -55,28 +56,10 @@ export default function SearchScreen() {
     void fetchProducts();
   }, [fetchProducts]);
 
-  const categories = useMemo(() => {
-    const uniqueCategoryNames = new Set<string>(["All"]);
-
-    products.forEach((course) => {
-      course.categories?.forEach((category) => {
-        uniqueCategoryNames.add(category.name);
-      });
-    });
-
-    return Array.from(uniqueCategoryNames);
-  }, [products]);
-
   const filteredProducts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return products.filter((course) => {
-      const matchesCategory =
-        selectedCategory === "All" ||
-        course.categories?.some(
-          (category) => category.name === selectedCategory,
-        );
-
       const matchesSearch =
         !normalizedQuery ||
         course.name.toLowerCase().includes(normalizedQuery) ||
@@ -86,9 +69,9 @@ export default function SearchScreen() {
           category.name.toLowerCase().includes(normalizedQuery),
         );
 
-      return matchesCategory && matchesSearch;
+      return matchesSearch;
     });
-  }, [products, query, selectedCategory]);
+  }, [products, query]);
 
   const hasSearchQuery = query.trim().length > 0;
   const openProductDetails = useCallback(
@@ -102,24 +85,31 @@ export default function SearchScreen() {
   );
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.bgShapeTop} />
-      <View style={styles.bgShapeBottom} />
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <View style={[styles.bgShapeTop, { backgroundColor: colors.overlayTop }]} />
+      <View style={[styles.bgShapeBottom, { backgroundColor: colors.overlayBottom }]} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.pageTitle}>Discover Courses</Text>
+        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>
+          Discover Courses
+        </Text>
 
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={heightPixel(18)} color="#8A98AE" />
+        <View
+          style={[
+            styles.searchContainer,
+            { borderColor: colors.inputBorder, backgroundColor: colors.inputBg },
+          ]}
+        >
+          <Ionicons name="search" size={heightPixel(18)} color={colors.textMuted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search by title, author or category"
-            placeholderTextColor="#8A98AE"
-            style={styles.searchInput}
+            placeholderTextColor={colors.textMuted}
+            style={[styles.searchInput, { color: colors.textPrimary }]}
           />
         </View>
 
@@ -153,24 +143,44 @@ export default function SearchScreen() {
         </ScrollView> */}
 
         {loading && (
-          <View style={styles.stateCard}>
-            <ActivityIndicator size="small" color="#0A2342" />
-            <Text style={styles.stateText}>Searching courses...</Text>
+          <View
+            style={[
+              styles.stateCard,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <ActivityIndicator size="small" color={colors.accentStrong} />
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+              Searching courses...
+            </Text>
           </View>
         )}
 
         {!loading && !!errorMessage && (
-          <View style={styles.stateCard}>
-            <Text style={styles.errorText}>{errorMessage}</Text>
-            <Pressable style={styles.retryButton} onPress={fetchProducts}>
+          <View
+            style={[
+              styles.stateCard,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <Text style={[styles.errorText, { color: colors.danger }]}>{errorMessage}</Text>
+            <Pressable
+              style={[styles.retryButton, { backgroundColor: colors.accentStrong }]}
+              onPress={fetchProducts}
+            >
               <Text style={styles.retryButtonText}>Try Again</Text>
             </Pressable>
           </View>
         )}
 
         {!loading && !errorMessage && !hasSearchQuery && (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>
+          <View
+            style={[
+              styles.stateCard,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>
               Start typing to search courses.
             </Text>
           </View>
@@ -179,22 +189,34 @@ export default function SearchScreen() {
         {!loading && !errorMessage && hasSearchQuery && (
           <>
             <View style={styles.resultHeader}>
-              <Text style={styles.resultTitle}>Search Results</Text>
-              <Text style={styles.resultCount}>
+              <Text style={[styles.resultTitle, { color: colors.textPrimary }]}>
+                Search Results
+              </Text>
+              <Text style={[styles.resultCount, { color: colors.textSecondary }]}>
                 {filteredProducts.length} items
               </Text>
             </View>
 
             {filteredProducts.length === 0 && (
-              <View style={styles.stateCard}>
-                <Text style={styles.stateText}>No matching courses found.</Text>
+              <View
+                style={[
+                  styles.stateCard,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                ]}
+              >
+                <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+                  No matching courses found.
+                </Text>
               </View>
             )}
 
             {filteredProducts.map((course) => (
               <Pressable
                 key={course?.id}
-                style={styles.courseCard}
+                style={[
+                  styles.courseCard,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                ]}
                 onPress={() => openProductDetails(course)}
               >
                 <Image
@@ -204,7 +226,10 @@ export default function SearchScreen() {
 
                 <View style={styles.courseBody}>
                   <View style={styles.courseTopRow}>
-                    <Text numberOfLines={1} style={styles.courseTitle}>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.courseTitle, { color: colors.textPrimary }]}
+                    >
                       {course?.name}
                     </Text>
                     <Pressable
@@ -212,7 +237,7 @@ export default function SearchScreen() {
                         event?.stopPropagation?.();
                         toggleBookmark(course);
                       }}
-                      style={styles.bookmarkButton}
+                      style={[styles.bookmarkButton, { backgroundColor: colors.accentSoft }]}
                     >
                       <Ionicons
                         name={
@@ -222,21 +247,24 @@ export default function SearchScreen() {
                         }
                         size={heightPixel(16)}
                         color={
-                          bookmarkedIds.has(course?.id) ? "#0A2342" : "#4B5D79"
+                          bookmarkedIds.has(course?.id) ? colors.accentStrong : colors.icon
                         }
                       />
                     </Pressable>
                   </View>
 
-                  <Text numberOfLines={2} style={styles.courseDescription}>
+                  <Text
+                    numberOfLines={2}
+                    style={[styles.courseDescription, { color: colors.textSecondary }]}
+                  >
                     {course?.description}
                   </Text>
-                  <Text style={styles.courseAuthor}>
+                  <Text style={[styles.courseAuthor, { color: colors.textSecondary }]}>
                     By {course?.author_name}
                   </Text>
 
                   <View style={styles.courseMetaRow}>
-                    <Text style={styles.coursePrice}>
+                    <Text style={[styles.coursePrice, { color: colors.accentStrong }]}>
                       {formatPrice(course?.price)}
                     </Text>
                   </View>
@@ -245,7 +273,7 @@ export default function SearchScreen() {
                     <View style={styles.categoryInlineRow}>
                       {course.categories?.map((category) => (
                         <View key={category.id} style={styles.inlineChip}>
-                          <Text style={styles.inlineChipText}>
+                          <Text style={[styles.inlineChipText, { color: colors.textSecondary }]}>
                             {category?.name}
                           </Text>
                         </View>
@@ -265,7 +293,6 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F5F7FF",
   },
   bgShapeTop: {
     position: "absolute",

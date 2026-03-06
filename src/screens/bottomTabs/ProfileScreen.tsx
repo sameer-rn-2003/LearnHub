@@ -3,6 +3,8 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { heightPixel, widthPixel } from "@/src/utils/Helper";
+import { logoutUser } from "@/src/store/authTokens";
+import { useAppTheme } from "@/src/theme/useAppTheme";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 const USER_EMAIL_KEY = "@learnhub/user_email";
@@ -13,9 +15,11 @@ const DEFAULT_PROFILE_IMAGE =
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { colors } = useAppTheme();
   const [email, setEmail] = useState("Not available");
   const [profileImage, setProfileImage] = useState(DEFAULT_PROFILE_IMAGE);
   const [message, setMessage] = useState("");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -76,26 +80,65 @@ export default function ProfileScreen() {
     setMessage("Profile picture updated.");
   }, []);
 
+  const onLogout = useCallback(async () => {
+    if (isLoggingOut) return;
+
+    setMessage("");
+    setIsLoggingOut(true);
+
+    try {
+      await logoutUser();
+      setEmail("Not available");
+      setProfileImage(DEFAULT_PROFILE_IMAGE);
+      router.replace("/(auth)/login");
+    } catch {
+      setMessage("Unable to log out. Please try again.");
+      setIsLoggingOut(false);
+    }
+  }, [isLoggingOut, router]);
+
   return (
-    <View style={styles.screen}>
-      <View style={styles.card}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
         <Image source={{ uri: profileImage }} style={styles.profileImage} />
 
-        <Text style={styles.nameText}>{displayName}</Text>
-        <Text style={styles.emailText}>Email ID: {email}</Text>
+        <Text style={[styles.nameText, { color: colors.textPrimary }]}>{displayName}</Text>
+        <Text style={[styles.emailText, { color: colors.textSecondary }]}>
+          Email ID: {email}
+        </Text>
 
-        <Pressable style={styles.button} onPress={onSelectFromGallery}>
+        <Pressable
+          style={[styles.button, { backgroundColor: colors.accentStrong }]}
+          onPress={onSelectFromGallery}
+        >
           <Text style={styles.buttonText}>Select From Gallery</Text>
         </Pressable>
 
         <Pressable
-          style={styles.secondaryButton}
+          style={[styles.secondaryButton, { backgroundColor: colors.accentSoft }]}
           onPress={() => router.push("/(tabs)/bookmarks")}
         >
-          <Text style={styles.secondaryButtonText}>Check Bookmarks</Text>
+          <Text style={[styles.secondaryButtonText, { color: colors.accent }]}>
+            Check Bookmarks
+          </Text>
         </Pressable>
 
-        {!!message && <Text style={styles.messageText}>{message}</Text>}
+        <Pressable
+          style={[styles.logoutButton, isLoggingOut && styles.logoutButtonDisabled]}
+          onPress={onLogout}
+          disabled={isLoggingOut}
+        >
+          <Text style={styles.logoutButtonText}>
+            {isLoggingOut ? "Logging out..." : "Logout"}
+          </Text>
+        </Pressable>
+
+        {!!message && <Text style={[styles.messageText, { color: colors.textSecondary }]}>{message}</Text>}
       </View>
     </View>
   );
@@ -104,18 +147,15 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F5F7FF",
     paddingHorizontal: widthPixel(20),
     paddingTop: heightPixel(30),
   },
   card: {
-    backgroundColor: "#FFFFFF",
     borderRadius: widthPixel(20),
     alignItems: "center",
     paddingVertical: heightPixel(28),
     paddingHorizontal: widthPixel(18),
     borderWidth: 1,
-    borderColor: "#E5E7EB",
   },
   profileImage: {
     width: widthPixel(96),
@@ -126,16 +166,13 @@ const styles = StyleSheet.create({
   nameText: {
     fontSize: heightPixel(20),
     fontWeight: "700",
-    color: "#111827",
     marginBottom: heightPixel(4),
   },
   emailText: {
     fontSize: heightPixel(13),
-    color: "#6B7280",
     marginBottom: heightPixel(14),
   },
   button: {
-    backgroundColor: "#4F46E5",
     borderRadius: widthPixel(20),
     paddingVertical: heightPixel(10),
     paddingHorizontal: widthPixel(18),
@@ -150,16 +187,28 @@ const styles = StyleSheet.create({
     borderRadius: widthPixel(20),
     paddingVertical: heightPixel(10),
     paddingHorizontal: widthPixel(18),
-    backgroundColor: "#EEF2FF",
   },
   secondaryButtonText: {
-    color: "#4338CA",
+    fontSize: heightPixel(13),
+    fontWeight: "700",
+  },
+  logoutButton: {
+    marginTop: heightPixel(10),
+    borderRadius: widthPixel(20),
+    paddingVertical: heightPixel(10),
+    paddingHorizontal: widthPixel(18),
+    backgroundColor: "#DC2626",
+  },
+  logoutButtonDisabled: {
+    backgroundColor: "#FCA5A5",
+  },
+  logoutButtonText: {
+    color: "#FFFFFF",
     fontSize: heightPixel(13),
     fontWeight: "700",
   },
   messageText: {
     marginTop: heightPixel(10),
     fontSize: heightPixel(12),
-    color: "#374151",
   },
 });

@@ -1,4 +1,5 @@
 import { BookmarkedCourse, useBookmarks } from "@/src/store/bookmarks";
+import { useAppTheme } from "@/src/theme/useAppTheme";
 import { heightPixel, widthPixel } from "@/src/utils/Helper";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -11,6 +12,7 @@ const formatPrice = (price: number) => `Rs. ${price.toFixed(2)}`;
 
 export default function BookmarksScreen() {
   const router = useRouter();
+  const { colors } = useAppTheme();
   const { bookmarkedCourses, toggleBookmark } = useBookmarks();
 
   const openProductDetails = (course: BookmarkedCourse) => {
@@ -21,20 +23,31 @@ export default function BookmarksScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.pageTitle}>Bookmarked Courses</Text>
-        <Text style={styles.pageSubtitle}>{bookmarkedCourses.length} saved</Text>
+        <Text style={[styles.pageTitle, { color: colors.textPrimary }]}>
+          Bookmarked Courses
+        </Text>
+        <Text style={[styles.pageSubtitle, { color: colors.textSecondary }]}>
+          {bookmarkedCourses.length} saved
+        </Text>
 
         {bookmarkedCourses.length === 0 && (
-          <View style={styles.emptyState}>
-            <Ionicons name="bookmark-outline" size={heightPixel(28)} color="#6C7C95" />
-            <Text style={styles.emptyTitle}>No bookmarks yet</Text>
-            <Text style={styles.emptyDesc}>
+          <View
+            style={[
+              styles.emptyState,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <Ionicons name="bookmark-outline" size={heightPixel(28)} color={colors.icon} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+              No bookmarks yet
+            </Text>
+            <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
               Save courses from Home or Search to keep them here.
             </Text>
           </View>
@@ -43,7 +56,10 @@ export default function BookmarksScreen() {
         {bookmarkedCourses.map((course) => (
           <Pressable
             key={course.id}
-            style={styles.courseCard}
+            style={[
+              styles.courseCard,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
             onPress={() => openProductDetails(course)}
           >
             <Image
@@ -53,7 +69,7 @@ export default function BookmarksScreen() {
 
             <View style={styles.courseBody}>
               <View style={styles.courseTopRow}>
-                <Text numberOfLines={1} style={styles.courseTitle}>
+                <Text numberOfLines={1} style={[styles.courseTitle, { color: colors.textPrimary }]}>
                   {course.name}
                 </Text>
                 <Pressable
@@ -61,17 +77,21 @@ export default function BookmarksScreen() {
                     event?.stopPropagation?.();
                     toggleBookmark(course);
                   }}
-                  style={styles.bookmarkButton}
+                  style={[styles.bookmarkButton, { backgroundColor: colors.accentSoft }]}
                 >
-                  <Ionicons name="bookmark" size={heightPixel(16)} color="#0A2342" />
+                  <Ionicons name="bookmark" size={heightPixel(16)} color={colors.accentStrong} />
                 </Pressable>
               </View>
 
-              <Text numberOfLines={2} style={styles.courseDescription}>
+              <Text numberOfLines={2} style={[styles.courseDescription, { color: colors.textSecondary }]}>
                 {course.description}
               </Text>
-              <Text style={styles.courseAuthor}>By {course.author_name}</Text>
-              <Text style={styles.coursePrice}>{formatPrice(course.price)}</Text>
+              <Text style={[styles.courseAuthor, { color: colors.textSecondary }]}>
+                By {course.author_name}
+              </Text>
+              <Text style={[styles.coursePrice, { color: colors.accentStrong }]}>
+                {formatPrice(course.price)}
+              </Text>
             </View>
           </Pressable>
         ))}
@@ -83,7 +103,6 @@ export default function BookmarksScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F5F7FF",
   },
   container: {
     flex: 1,

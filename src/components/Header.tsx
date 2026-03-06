@@ -1,9 +1,11 @@
-import { COLORS } from "@/src/constants/colors";
+import { useAppTheme } from "@/src/theme/useAppTheme";
 import { heightPixel, widthPixel } from "@/src/utils/Helper";
 import { Ionicons } from "@expo/vector-icons";
 import { Image, StyleSheet, Text, View } from "react-native";
 
 export default function Header() {
+  const { colors } = useAppTheme();
+
   return (
     <View style={styles.container}>
       <View
@@ -17,7 +19,7 @@ export default function Header() {
           style={{
             height: heightPixel(34),
             width: widthPixel(34),
-            backgroundColor: COLORS.primary,
+            backgroundColor: colors.accentStrong,
             borderRadius: widthPixel(12),
             justifyContent: "center",
             alignItems: "center",
@@ -25,12 +27,12 @@ export default function Header() {
         >
           <Image source={require("../../assets/images/Logo.png")} />
         </View>
-        <Text style={styles.title}>LearnHub</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>LearnHub</Text>
       </View>
       <Ionicons
         name="notifications-outline"
         size={heightPixel(22)}
-        color={COLORS.textPrimary}
+        color={colors.icon}
       />
     </View>
   );
@@ -46,6 +48,5 @@ const styles = StyleSheet.create({
   title: {
     fontSize: heightPixel(20),
     fontWeight: "700",
-    color: COLORS.textPrimary,
   },
 });

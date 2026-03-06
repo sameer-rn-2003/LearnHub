@@ -4,6 +4,11 @@ import {
   ProductWithCategories,
 } from "@/src/hooks/request";
 import { useBookmarks } from "@/src/store/bookmarks";
+import {
+  getCourseCatalogCache,
+  saveCourseCatalogCache,
+} from "@/src/store/offlineCourses";
+import { useAppTheme } from "@/src/theme/useAppTheme";
 import { heightPixel, widthPixel } from "@/src/utils/Helper";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -12,11 +17,14 @@ import {
   ActivityIndicator,
   Image,
   ImageBackground,
+  Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  View
+  ToastAndroid,
+  View,
 } from "react-native";
 
 const FALLBACK_IMAGE =
@@ -26,34 +34,74 @@ const formatPrice = (price: number) => `Rs. ${price.toFixed(2)}`;
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { colors } = useAppTheme();
   const [products, setProducts] = useState<ProductWithCategories[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [offlineNotice, setOfflineNotice] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery] = useState("");
   const { bookmarkedIds, toggleBookmark } = useBookmarks();
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage("");
-
-    try {
-      const response = await getProductsWithCategoriesApi();
-      setProducts(response?.data?.data ?? []);
-    } catch (error: any) {
-      const message =
-        error?.response?.data?.message ||
-        "Unable to fetch products. Please try again.";
-      setErrorMessage(message);
-      setProducts([]);
-    } finally {
-      setLoading(false);
+  const showRefreshToast = useCallback(() => {
+    if (Platform.OS === "android") {
+      ToastAndroid.show("Data refreshed", ToastAndroid.SHORT);
     }
   }, []);
+
+  const fetchProducts = useCallback(
+    async (isPullToRefresh = false) => {
+      if (isPullToRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setErrorMessage("");
+
+      try {
+        const response = await getProductsWithCategoriesApi();
+        const fetchedCourses = response?.data?.data ?? [];
+        setProducts(fetchedCourses);
+        await saveCourseCatalogCache(fetchedCourses);
+        setOfflineNotice("");
+        if (isPullToRefresh) {
+          showRefreshToast();
+        }
+      } catch (error: any) {
+        const message =
+          error?.response?.data?.message ||
+          "Unable to fetch products. Please try again.";
+        const cachedCourses =
+          await getCourseCatalogCache<ProductWithCategories>();
+        if (cachedCourses.length > 0) {
+          setProducts(cachedCourses);
+          setOfflineNotice("Offline mode: showing saved courses.");
+          setErrorMessage("");
+        } else {
+          setErrorMessage(message);
+          setOfflineNotice("");
+          setProducts([]);
+        }
+      } finally {
+        if (isPullToRefresh) {
+          setRefreshing(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    [showRefreshToast],
+  );
 
   useEffect(() => {
     void fetchProducts();
   }, [fetchProducts]);
+
+  const onRefresh = useCallback(() => {
+    if (loading || refreshing) return;
+    void fetchProducts(true);
+  }, [fetchProducts, loading, refreshing]);
 
   const categoryLabels = useMemo(() => {
     const categories = new Set<string>(["All"]);
@@ -107,15 +155,42 @@ export default function HomeScreen() {
   );
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.bgShapeTop} />
-      <View style={styles.bgShapeBottom} />
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <View style={[styles.bgShapeTop, { backgroundColor: colors.overlayTop }]} />
+      <View
+        style={[styles.bgShapeBottom, { backgroundColor: colors.overlayBottom }]}
+      />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accentStrong}
+            colors={[colors.accentStrong]}
+          />
+        }
       >
         <Header />
+        {!!offlineNotice && (
+          <View
+            style={[
+              styles.offlineBanner,
+              { borderColor: colors.border, backgroundColor: colors.warningBg },
+            ]}
+          >
+            <Ionicons
+              name="cloud-offline-outline"
+              size={heightPixel(14)}
+              color={colors.warningText}
+            />
+            <Text style={[styles.offlineBannerText, { color: colors.warningText }]}>
+              {offlineNotice}
+            </Text>
+          </View>
+        )}
 
         {/* <View style={styles.searchContainer}>
           <Ionicons name="search" size={heightPixel(18)} color="#8A98AE" />
@@ -140,13 +215,19 @@ export default function HomeScreen() {
                 key={label}
                 style={[
                   styles.categoryChip,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
                   active && styles.categoryChipActive,
+                  active && {
+                    backgroundColor: colors.accentStrong,
+                    borderColor: colors.accentStrong,
+                  },
                 ]}
                 onPress={() => setSelectedCategory(label)}
               >
                 <Text
                   style={[
                     styles.categoryText,
+                    { color: colors.textSecondary },
                     active && styles.categoryTextActive,
                   ]}
                 >
@@ -158,16 +239,33 @@ export default function HomeScreen() {
         </ScrollView>
 
         {loading && (
-          <View style={styles.stateCard}>
-            <ActivityIndicator size="small" color="#0A2342" />
-            <Text style={styles.stateText}>Loading products...</Text>
+          <View
+            style={[
+              styles.stateCard,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <ActivityIndicator size="small" color={colors.accentStrong} />
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+              Loading products...
+            </Text>
           </View>
         )}
 
         {!loading && !!errorMessage && (
-          <View style={styles.stateCard}>
-            <Text style={styles.errorText}>{errorMessage}</Text>
-            <Pressable style={styles.retryButton} onPress={fetchProducts}>
+          <View
+            style={[
+              styles.stateCard,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <Text style={[styles.errorText, { color: colors.danger }]}>{errorMessage}</Text>
+            <Pressable
+              style={[styles.retryButton, { backgroundColor: colors.accentStrong }]}
+              onPress={() => {
+                void fetchProducts();
+              }}
+            >
               <Text style={styles.retryButtonText}>Try Again</Text>
             </Pressable>
           </View>
@@ -217,8 +315,10 @@ export default function HomeScreen() {
             )}
 
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Trending Right Now</Text>
-              <Text style={styles.sectionMeta}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                Trending Right Now
+              </Text>
+              <Text style={[styles.sectionMeta, { color: colors.textSecondary }]}>
                 {trendingCourses.length} items
               </Text>
             </View>
@@ -227,7 +327,10 @@ export default function HomeScreen() {
               {trendingCourses.map((course) => (
                 <Pressable
                   key={course.id}
-                  style={styles.trendingCard}
+                  style={[
+                    styles.trendingCard,
+                    { borderColor: colors.border, backgroundColor: colors.surface },
+                  ]}
                   onPress={() => openProductDetails(course)}
                 >
                   <Pressable
@@ -235,7 +338,10 @@ export default function HomeScreen() {
                       event?.stopPropagation?.();
                       handleToggleBookmark(course);
                     }}
-                    style={styles.trendingBookmarkButton}
+                    style={[
+                      styles.trendingBookmarkButton,
+                      { backgroundColor: colors.surface },
+                    ]}
                   >
                     <Ionicons
                       name={
@@ -245,7 +351,7 @@ export default function HomeScreen() {
                       }
                       size={heightPixel(16)}
                       color={
-                        bookmarkedIds.has(course.id) ? "#0A2342" : "#4B5D79"
+                        bookmarkedIds.has(course.id) ? colors.accentStrong : colors.icon
                       }
                     />
                   </Pressable>
@@ -253,13 +359,16 @@ export default function HomeScreen() {
                     source={{ uri: course.images?.[0] || FALLBACK_IMAGE }}
                     style={styles.trendingImage}
                   />
-                  <Text numberOfLines={2} style={styles.trendingTitle}>
+                  <Text
+                    numberOfLines={2}
+                    style={[styles.trendingTitle, { color: colors.textPrimary }]}
+                  >
                     {course.name}
                   </Text>
-                  <Text style={styles.trendingAuthor}>
+                  <Text style={[styles.trendingAuthor, { color: colors.textSecondary }]}>
                     {course.author_name}
                   </Text>
-                  <Text style={styles.trendingPrice}>
+                  <Text style={[styles.trendingPrice, { color: colors.accentStrong }]}>
                     {formatPrice(course.price)}
                   </Text>
                 </Pressable>
@@ -267,15 +376,22 @@ export default function HomeScreen() {
             </ScrollView>
 
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>All Courses</Text>
-              <Text style={styles.sectionMeta}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                All Courses
+              </Text>
+              <Text style={[styles.sectionMeta, { color: colors.textSecondary }]}>
                 {filteredProducts.length} results
               </Text>
             </View>
 
             {filteredProducts.length === 0 && (
-              <View style={styles.stateCard}>
-                <Text style={styles.stateText}>
+              <View
+                style={[
+                  styles.stateCard,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                ]}
+              >
+                <Text style={[styles.stateText, { color: colors.textSecondary }]}>
                   No courses found for current filters.
                 </Text>
               </View>
@@ -284,7 +400,10 @@ export default function HomeScreen() {
             {filteredProducts.map((course) => (
               <Pressable
                 key={course.id}
-                style={styles.courseCard}
+                style={[
+                  styles.courseCard,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                ]}
                 onPress={() => openProductDetails(course)}
               >
                 <Image
@@ -293,7 +412,10 @@ export default function HomeScreen() {
                 />
                 <View style={styles.courseBody}>
                   <View style={styles.courseTopRow}>
-                    <Text numberOfLines={1} style={styles.courseTitle}>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.courseTitle, { color: colors.textPrimary }]}
+                    >
                       {course.name}
                     </Text>
                     <Pressable
@@ -301,7 +423,10 @@ export default function HomeScreen() {
                         event?.stopPropagation?.();
                         handleToggleBookmark(course);
                       }}
-                      style={styles.courseBookmarkButton}
+                      style={[
+                        styles.courseBookmarkButton,
+                        { backgroundColor: colors.accentSoft },
+                      ]}
                     >
                       <Ionicons
                         name={
@@ -311,25 +436,36 @@ export default function HomeScreen() {
                         }
                         size={heightPixel(16)}
                         color={
-                          bookmarkedIds.has(course.id) ? "#0A2342" : "#4B5D79"
+                          bookmarkedIds.has(course.id) ? colors.accentStrong : colors.icon
                         }
                       />
                     </Pressable>
                   </View>
-                  <Text numberOfLines={2} style={styles.courseDescription}>
+                  <Text
+                    numberOfLines={2}
+                    style={[styles.courseDescription, { color: colors.textSecondary }]}
+                  >
                     {course.description}
                   </Text>
-                  <Text style={styles.coursePrice}>
+                  <Text style={[styles.coursePrice, { color: colors.accentStrong }]}>
                     {formatPrice(course.price)}
                   </Text>
-                  <Text style={styles.courseAuthor}>
+                  <Text style={[styles.courseAuthor, { color: colors.textSecondary }]}>
                     By {course.author_name}
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View style={styles.courseCategoryRow}>
                       {course.categories?.map((category) => (
-                        <View key={category.id} style={styles.inlineCategory}>
-                          <Text style={styles.inlineCategoryText}>
+                        <View
+                          key={category.id}
+                          style={[
+                            styles.inlineCategory,
+                            { backgroundColor: colors.surfaceAlt },
+                          ]}
+                        >
+                          <Text
+                            style={[styles.inlineCategoryText, { color: colors.textSecondary }]}
+                          >
                             {category.name}
                           </Text>
                         </View>
@@ -635,6 +771,25 @@ const styles = StyleSheet.create({
   inlineCategoryText: {
     color: "#30445F",
     fontSize: heightPixel(10),
+    fontWeight: "600",
+  },
+  offlineBanner: {
+    marginTop: heightPixel(12),
+    marginBottom: heightPixel(4),
+    borderRadius: widthPixel(999),
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    backgroundColor: "#EFF6FF",
+    paddingVertical: heightPixel(8),
+    paddingHorizontal: widthPixel(12),
+    flexDirection: "row",
+    alignItems: "center",
+    gap: widthPixel(6),
+    alignSelf: "flex-start",
+  },
+  offlineBannerText: {
+    color: "#1E40AF",
+    fontSize: heightPixel(11),
     fontWeight: "600",
   },
 });

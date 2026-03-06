@@ -125,6 +125,13 @@ export const clearAuthTokens = async () => {
   removeLocalToken(REFRESH_TOKEN_KEY);
 };
 
+const clearAllLocalStorage = async () => {
+  await AsyncStorage.clear();
+  const localStorageRef = getLocalStorage();
+  if (!localStorageRef) return;
+  localStorageRef.clear();
+};
+
 export const logoutUser = async () => {
-  await clearAuthTokens();
+  await clearAllLocalStorage();
 };

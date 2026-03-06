@@ -1,178 +1,303 @@
 import { heightPixel, widthPixel } from "@/src/utils/Helper";
+import {
+  CourseVideoProgress,
+  EnrolledCourse,
+  getCourseVideoProgress,
+  getEnrolledCourses,
+} from "@/src/store/offlineCourses";
+import { useAppTheme } from "@/src/theme/useAppTheme";
 import { Ionicons } from "@expo/vector-icons";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1516321497487-e288fb19713f";
 
-type ActiveCourseItem = {
-  id: string;
-  name: string;
-  image: string;
-  lessonsText: string;
-  durationText: string;
+const DEFAULT_DURATION_SECONDS = 120;
+
+type EnrolledCourseWithProgress = EnrolledCourse & {
+  progress: CourseVideoProgress | null;
   progressPercent: number;
+  progressLabel: string;
 };
 
-const ACTIVE_COURSES: ActiveCourseItem[] = [
-  {
-    id: "course-1",
-    name: "Python for Beginners",
-    image: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4",
-    lessonsText: "24 lessons",
-    durationText: "6h 30m",
-    progressPercent: 65,
-  },
-  {
-    id: "course-2",
-    name: "UI/UX Fundamentals",
-    image: "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e",
-    lessonsText: "18 lessons",
-    durationText: "4h 15m",
-    progressPercent: 32,
-  },
-  {
-    id: "course-3",
-    name: "Node.js Mastery",
-    image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c",
-    lessonsText: "20 lessons",
-    durationText: "5h 10m",
-    progressPercent: 49,
-  },
-];
+const formatTime = (seconds: number) => {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
 
-const RECENTLY_VIEWED = [
-  {
-    id: "recent-1",
-    name: "Advanced JS",
-    image: "https://images.unsplash.com/photo-1518770660439-4636190af475",
-    timeAgo: "3 days ago",
-  },
-  {
-    id: "recent-2",
-    name: "Mastering React",
-    image: "https://images.unsplash.com/photo-1633356122544-f134324a6cee",
-    timeAgo: "1 week ago",
-  },
-  {
-    id: "recent-3",
-    name: "Node.js",
-    image: "https://images.unsplash.com/photo-1593720213428-28a5b9e94613",
-    timeAgo: "2 weeks ago",
-  },
-];
+const toProgressPercent = (progress: CourseVideoProgress | null) => {
+  if (!progress) return 0;
+  const duration = progress.durationSeconds || DEFAULT_DURATION_SECONDS;
+  const safeDuration = Math.max(1, duration);
+  const safePosition = progress.completed
+    ? safeDuration
+    : Math.max(0, progress.positionSeconds);
+  const ratio = (safePosition / safeDuration) * 100;
+  return Math.max(0, Math.min(100, Math.round(ratio)));
+};
+
+const toProgressLabel = (progress: CourseVideoProgress | null) => {
+  if (!progress) return "Not started";
+  if (progress.completed) return "Completed";
+  if (progress.positionSeconds <= 0) return "Not started";
+  return `Resume at ${formatTime(progress.positionSeconds)}`;
+};
 
 export default function MyCourses() {
+  const router = useRouter();
+  const { colors } = useAppTheme();
+  const [courses, setCourses] = useState<EnrolledCourseWithProgress[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const loadEnrolledCourses = useCallback(async (isPullToRefresh = false) => {
+    if (isPullToRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setErrorMessage("");
+
+    try {
+      const enrolledCourses = await getEnrolledCourses();
+      const withProgress = await Promise.all(
+        enrolledCourses.map(async (course) => {
+          const progress = await getCourseVideoProgress(course.id);
+          return {
+            ...course,
+            progress,
+            progressPercent: toProgressPercent(progress),
+            progressLabel: toProgressLabel(progress),
+          } satisfies EnrolledCourseWithProgress;
+        }),
+      );
+
+      withProgress.sort((a, b) => {
+        const aTimestamp = a.progress?.updatedAt ?? a.enrolledAt;
+        const bTimestamp = b.progress?.updatedAt ?? b.enrolledAt;
+        return (
+          new Date(bTimestamp).getTime() - new Date(aTimestamp).getTime()
+        );
+      });
+
+      setCourses(withProgress);
+    } catch {
+      setErrorMessage("Unable to load enrolled courses.");
+    } finally {
+      if (isPullToRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadEnrolledCourses();
+    }, [loadEnrolledCourses]),
+  );
+
+  const completedCount = useMemo(
+    () => courses.filter((course) => course.progressPercent >= 100).length,
+    [courses],
+  );
+
+  const openCourseDetails = useCallback(
+    (course: EnrolledCourseWithProgress) => {
+      router.push({
+        pathname: "/(tabs)/home/courseDetails",
+        params: { productData: encodeURIComponent(JSON.stringify(course)) },
+      });
+    },
+    [router],
+  );
+
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              if (loading || refreshing) return;
+              void loadEnrolledCourses(true);
+            }}
+            tintColor={colors.accentStrong}
+            colors={[colors.accentStrong]}
+          />
+        }
       >
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <View style={styles.avatarWrap}>
-              <Image source={{ uri: FALLBACK_IMAGE }} style={styles.avatar} />
-            </View>
             <View>
-              <Text style={styles.welcomeText}>Welcome back</Text>
-              <Text style={styles.helloText}>Hello, Alex!</Text>
+              <Text style={[styles.welcomeText, { color: colors.textMuted }]}>
+                Your learning space
+              </Text>
+              <Text style={[styles.helloText, { color: colors.textPrimary }]}>
+                My Courses
+              </Text>
             </View>
           </View>
-          <View style={styles.notificationButton}>
+          <View
+            style={[
+              styles.notificationButton,
+              { backgroundColor: colors.accentSoft, borderColor: colors.border },
+            ]}
+          >
             <Ionicons
-              name="notifications-outline"
+              name="school-outline"
               size={heightPixel(16)}
-              color="#4B5563"
+              color={colors.icon}
             />
           </View>
         </View>
 
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={heightPixel(16)} color="#9CA3AF" />
-          <Text style={styles.searchText}>Search your courses...</Text>
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Active Courses</Text>
-          <Text style={styles.viewAllText}>View all</Text>
-        </View>
-
-        {ACTIVE_COURSES.map((course) => (
-          <View key={course.id} style={styles.courseCard}>
-            <View style={styles.courseTopRow}>
-              <Image
-                source={{ uri: course.image || FALLBACK_IMAGE }}
-                style={styles.courseImage}
-              />
-
-              <View style={styles.courseTitleWrap}>
-                <Text numberOfLines={1} style={styles.courseTitle}>
-                  {course.name}
-                </Text>
-                <Text style={styles.courseMeta}>
-                  {course.lessonsText}  {course.durationText}
-                </Text>
-              </View>
-
-              <View style={styles.playButton}>
-                <Ionicons
-                  name="play"
-                  size={heightPixel(12)}
-                  color="#FFFFFF"
-                />
-              </View>
-            </View>
-
-            <View style={styles.progressLabelRow}>
-              <Text style={styles.progressLabel}>Progress</Text>
-              <Text style={styles.progressPercent}>{course.progressPercent}%</Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${course.progressPercent}%` },
-                ]}
-              />
-            </View>
-          </View>
-        ))}
-
-        <Text style={styles.sectionTitle}>Recently Viewed</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.recentRow}
+        <View
+          style={[
+            styles.searchContainer,
+            { backgroundColor: colors.inputBg, borderColor: colors.inputBorder },
+          ]}
         >
-          {RECENTLY_VIEWED.map((course) => (
-            <View key={course.id} style={styles.recentItem}>
-              <Image
-                source={{ uri: course.image || FALLBACK_IMAGE }}
-                style={styles.recentImage}
-              />
-              <Text numberOfLines={1} style={styles.recentTitle}>
-                {course.name}
-              </Text>
-              <Text style={styles.recentMeta}>{course.timeAgo}</Text>
-            </View>
-          ))}
-        </ScrollView>
-
-        <View style={styles.streakCard}>
-          <View style={styles.streakLeft}>
-            <View style={styles.streakIconCircle}>
-              <Ionicons name="flame" size={heightPixel(14)} color="#2F6FF2" />
-            </View>
-            <View>
-              <Text style={styles.streakTitle}>5 Day Streak!</Text>
-              <Text style={styles.streakSubtitle}>
-                Keep it up, you&apos;re doing great!
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={heightPixel(18)} color="#2F6FF2" />
+          <Ionicons name="book-outline" size={heightPixel(16)} color={colors.textMuted} />
+          <Text style={[styles.searchText, { color: colors.textMuted }]}>
+            {courses.length} enrolled  |  {completedCount} completed
+          </Text>
         </View>
+
+        {loading && (
+          <View
+            style={[
+              styles.stateCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <ActivityIndicator size="small" color={colors.accentStrong} />
+            <Text style={[styles.stateText, { color: colors.textSecondary }]}>
+              Loading your courses...
+            </Text>
+          </View>
+        )}
+
+        {!loading && !!errorMessage && (
+          <View
+            style={[
+              styles.stateCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.stateText, { color: colors.danger }]}>
+              {errorMessage}
+            </Text>
+            <Pressable
+              style={[styles.retryButton, { backgroundColor: colors.accentStrong }]}
+              onPress={() => {
+                void loadEnrolledCourses();
+              }}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {!loading && !errorMessage && courses.length === 0 && (
+          <View
+            style={[
+              styles.emptyCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Ionicons name="albums-outline" size={heightPixel(24)} color={colors.icon} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+              No enrolled courses yet
+            </Text>
+            <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>
+              Enroll from course details to see progress here.
+            </Text>
+          </View>
+        )}
+
+        {!loading && !errorMessage && courses.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                Continue Learning
+              </Text>
+            </View>
+
+            {courses.map((course) => (
+              <Pressable
+                key={course.id}
+                onPress={() => openCourseDetails(course)}
+                style={[
+                  styles.courseCard,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+              >
+                <View style={styles.courseTopRow}>
+                  <Image
+                    source={{ uri: course.images?.[0] || FALLBACK_IMAGE }}
+                    style={styles.courseImage}
+                  />
+
+                  <View style={styles.courseTitleWrap}>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.courseTitle, { color: colors.textPrimary }]}
+                    >
+                      {course.name}
+                    </Text>
+                    <Text numberOfLines={1} style={[styles.courseMeta, { color: colors.textMuted }]}>
+                      {course.author_name}
+                    </Text>
+                    <Text style={[styles.courseProgressLabel, { color: colors.textSecondary }]}>
+                      {course.progressLabel}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.playButton, { backgroundColor: colors.accentStrong }]}>
+                    <Ionicons name="play" size={heightPixel(12)} color="#FFFFFF" />
+                  </View>
+                </View>
+
+                <View style={styles.progressLabelRow}>
+                  <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
+                    Progress
+                  </Text>
+                  <Text style={[styles.progressPercent, { color: colors.accentStrong }]}>
+                    {course.progressPercent}%
+                  </Text>
+                </View>
+                <View style={[styles.progressTrack, { backgroundColor: colors.inputBg }]}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${course.progressPercent}%` },
+                      { backgroundColor: colors.accentStrong },
+                    ]}
+                  />
+                </View>
+              </Pressable>
+            ))}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -181,7 +306,6 @@ export default function MyCourses() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4F6FA",
   },
   contentContainer: {
     paddingHorizontal: widthPixel(14),
@@ -199,16 +323,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: widthPixel(8),
   },
-  avatarWrap: {
-    width: widthPixel(34),
-    height: heightPixel(34),
-    borderRadius: widthPixel(17),
-    overflow: "hidden",
-  },
-  avatar: {
-    width: "100%",
-    height: "100%",
-  },
   welcomeText: {
     color: "#9AA1AD",
     fontSize: heightPixel(10),
@@ -224,6 +338,8 @@ const styles = StyleSheet.create({
     height: heightPixel(30),
     borderRadius: widthPixel(10),
     backgroundColor: "#ECEFF4",
+    borderWidth: 1,
+    borderColor: "#DCE6F8",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -231,6 +347,8 @@ const styles = StyleSheet.create({
     height: heightPixel(42),
     borderRadius: widthPixel(12),
     backgroundColor: "#ECEFF4",
+    borderWidth: 1,
+    borderColor: "#E2E8F4",
     paddingHorizontal: widthPixel(12),
     flexDirection: "row",
     alignItems: "center",
@@ -243,20 +361,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: heightPixel(10),
+    marginBottom: heightPixel(8),
   },
   sectionTitle: {
     color: "#1F2937",
-    fontSize: heightPixel(19),
+    fontSize: heightPixel(17),
     fontWeight: "800",
-  },
-  viewAllText: {
-    color: "#2F6FF2",
-    fontSize: heightPixel(12),
-    fontWeight: "700",
   },
   courseCard: {
     backgroundColor: "#FFFFFF",
@@ -291,6 +401,11 @@ const styles = StyleSheet.create({
     fontSize: heightPixel(11),
     fontWeight: "500",
   },
+  courseProgressLabel: {
+    marginTop: heightPixel(4),
+    fontSize: heightPixel(10),
+    fontWeight: "600",
+  },
   playButton: {
     width: widthPixel(30),
     height: heightPixel(30),
@@ -324,64 +439,50 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: "#2F6FF2",
   },
-  recentRow: {
-    paddingTop: heightPixel(6),
-    paddingBottom: heightPixel(14),
+  stateCard: {
+    marginTop: heightPixel(8),
+    borderRadius: widthPixel(14),
+    borderWidth: 1,
+    paddingHorizontal: widthPixel(12),
+    paddingVertical: heightPixel(12),
+    alignItems: "center",
+    justifyContent: "center",
+    gap: heightPixel(8),
   },
-  recentItem: {
-    width: widthPixel(88),
-    marginRight: widthPixel(10),
+  stateText: {
+    textAlign: "center",
+    fontSize: heightPixel(12),
+    fontWeight: "600",
   },
-  recentImage: {
-    width: "100%",
-    height: heightPixel(78),
+  retryButton: {
     borderRadius: widthPixel(10),
-    backgroundColor: "#E5E7EB",
-    marginBottom: heightPixel(6),
+    paddingHorizontal: widthPixel(12),
+    paddingVertical: heightPixel(8),
   },
-  recentTitle: {
-    color: "#1F2937",
+  retryButtonText: {
+    color: "#FFFFFF",
     fontSize: heightPixel(12),
     fontWeight: "700",
   },
-  recentMeta: {
-    color: "#9AA1AD",
-    fontSize: heightPixel(10),
-    marginTop: heightPixel(2),
-  },
-  streakCard: {
-    backgroundColor: "#EAF0FF",
+  emptyCard: {
+    marginTop: heightPixel(6),
     borderRadius: widthPixel(14),
     borderWidth: 1,
-    borderColor: "#D9E2FF",
-    paddingVertical: heightPixel(11),
-    paddingHorizontal: widthPixel(12),
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  streakLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: widthPixel(10),
-  },
-  streakIconCircle: {
-    width: widthPixel(28),
-    height: heightPixel(28),
-    borderRadius: widthPixel(14),
-    backgroundColor: "#DDE7FF",
+    paddingVertical: heightPixel(20),
+    paddingHorizontal: widthPixel(14),
     alignItems: "center",
     justifyContent: "center",
   },
-  streakTitle: {
-    color: "#1F2937",
+  emptyTitle: {
+    marginTop: heightPixel(8),
     fontSize: heightPixel(14),
     fontWeight: "800",
   },
-  streakSubtitle: {
-    marginTop: heightPixel(2),
-    color: "#7180A0",
-    fontSize: heightPixel(10),
-    fontWeight: "600",
+  emptyBody: {
+    marginTop: heightPixel(4),
+    textAlign: "center",
+    fontSize: heightPixel(11),
+    lineHeight: heightPixel(17),
+    fontWeight: "500",
   },
 });

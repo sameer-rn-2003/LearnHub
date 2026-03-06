@@ -2,14 +2,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 import { useAuthStatus } from "@/src/hooks/useAuthStatus";
+import { useAppTheme } from "@/src/theme/useAppTheme";
 
 export default function TabsLayout() {
   const { isLoading, hasToken } = useAuthStatus();
+  const { colors } = useAppTheme();
 
   if (isLoading) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -22,11 +24,18 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: "#4F46E5",
-        tabBarInactiveTintColor: "#9CA3AF",
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
           height: 60,
           paddingBottom: 8,
+          paddingTop: 6,
+          borderTopColor: colors.tabBarBorder,
+          backgroundColor: colors.tabBarBg,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "700",
         },
         tabBarIcon: ({ color, size }) => {
           const iconName: keyof typeof Ionicons.glyphMap =
