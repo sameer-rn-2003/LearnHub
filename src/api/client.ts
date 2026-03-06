@@ -1,16 +1,13 @@
-import axios from "axios";
-import { router } from "expo-router";
 import {
-  extractTokenFields,
   getAccessToken,
   getRefreshToken,
   logoutUser,
   saveAccessToken,
-  saveRefreshToken,
-} from "../store/authTokens";
+} from "@/src/store/authTokens";
+import axios from "axios";
+import { router } from "expo-router";
 
-const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-const baseURL = configuredBaseUrl;
+const baseURL = process.env.EXPO_PUBLIC_API_URL?.trim();
 const loginPath = "/api/auth/login";
 const refreshPath = "/api/auth/refresh-token";
 
@@ -32,27 +29,8 @@ const handleLogout = async () => {
 const isAuthRequest = (url?: string) => {
   if (!url) return false;
   const normalized = url.toLowerCase().trim();
-
-  if (normalized === loginPath || normalized === refreshPath) {
-    return true;
-  }
-
-  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
-    try {
-      const parsed = new URL(normalized);
-      return parsed.pathname === loginPath || parsed.pathname === refreshPath;
-    } catch {
-      return false;
-    }
-  }
-
-  const withLeadingSlash = normalized.startsWith("/")
-    ? normalized
-    : `/${normalized}`;
-
   return (
-    withLeadingSlash.startsWith(loginPath) ||
-    withLeadingSlash.startsWith(refreshPath)
+    normalized.includes(loginPath) || normalized.includes(refreshPath)
   );
 };
 
@@ -62,11 +40,11 @@ apiClient.interceptors.request.use(
       return config;
     }
 
-    const accessToken = await getAccessToken();
+    const token = await getAccessToken();
 
-    if (accessToken) {
+    if (token) {
       config.headers = config.headers ?? {};
-      config.headers.Authorization = `Bearer ${accessToken}`;
+      config.headers.Authorization = `Bearer ${token}`;
     }
 
     return config;
@@ -78,17 +56,13 @@ apiClient.interceptors.response.use(
   (response) => response,
 
   async (error) => {
-    const originalRequest = error?.config;
+    const originalRequest = error.config;
 
-    if (!originalRequest) {
+    if (isAuthRequest(originalRequest?.url)) {
       return Promise.reject(error);
     }
 
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry &&
-      !isAuthRequest(originalRequest.url)
-    ) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
@@ -100,13 +74,11 @@ apiClient.interceptors.response.use(
         }
 
         const refreshUrl = baseURL ? `${baseURL}${refreshPath}` : refreshPath;
-
         const response = await axios.post(refreshUrl, {
-          refreshToken: refreshToken,
+          refreshToken,
         });
 
-        const refreshedTokens = extractTokenFields(response?.data);
-        const newAccessToken = refreshedTokens?.accessToken;
+        const newAccessToken = response.data?.accessToken;
 
         if (!newAccessToken) {
           await handleLogout();
@@ -114,9 +86,6 @@ apiClient.interceptors.response.use(
         }
 
         await saveAccessToken(newAccessToken);
-        if (refreshedTokens?.refreshToken) {
-          await saveRefreshToken(refreshedTokens.refreshToken);
-        }
 
         originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;

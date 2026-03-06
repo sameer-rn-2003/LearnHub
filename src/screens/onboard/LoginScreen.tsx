@@ -1,6 +1,10 @@
 import CommonTextInput from "@/src/components/CommonTextInput";
 import { LoginApi } from "@/src/hooks/request";
-import { extractTokenFields, setAuthTokens } from "@/src/store/authTokens";
+import {
+  extractTokenFields,
+  saveAccessToken,
+  saveRefreshToken,
+} from "@/src/store/authTokens";
 import { useAppTheme } from "@/src/theme/useAppTheme";
 import {
   heightPixel,
@@ -58,15 +62,14 @@ export default function LoginScreen() {
       };
       const response = await LoginApi(loginBody);
       const tokenFields = extractTokenFields(response?.data);
-      console.log("response:::::", response);
-      if (!tokenFields?.accessToken || !tokenFields?.refreshToken) {
+      if (!tokenFields?.accessToken) {
         setApiError("Token data missing in login response.");
         return;
       }
-      await setAuthTokens({
-        accessToken: tokenFields.accessToken,
-        refreshToken: tokenFields.refreshToken,
-      });
+      await saveAccessToken(tokenFields.accessToken);
+      if (tokenFields.refreshToken) {
+        await saveRefreshToken(tokenFields.refreshToken);
+      }
       await AsyncStorage.setItem(USER_EMAIL_KEY, loginBody.email);
       router.replace("/(tabs)/home");
     } catch (error: any) {

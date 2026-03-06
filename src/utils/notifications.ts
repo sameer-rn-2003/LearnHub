@@ -1,14 +1,27 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
+
+type NotificationsModule = typeof import("expo-notifications");
 
 const BOOKMARK_REMINDER_ID_KEY = "@learnhub/bookmark_reminder_notification_id";
 const COURSE_REMINDER_KEY_PREFIX = "@learnhub/course_reminder_notification_id:";
 
+const isExpoGo = Constants.executionEnvironment === "storeClient";
+
 let isInitialized = false;
+let notificationsModule: NotificationsModule | null = null;
+
+const getNotificationsModule = async (): Promise<NotificationsModule | null> => {
+  if (Platform.OS === "web" || isExpoGo) return null;
+  if (notificationsModule) return notificationsModule;
+  notificationsModule = await import("expo-notifications");
+  return notificationsModule;
+};
 
 export const initializeNotifications = async () => {
-  if (Platform.OS === "web") return false;
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return false;
   if (isInitialized) return true;
 
   const currentPermission = await Notifications.getPermissionsAsync();
@@ -38,6 +51,9 @@ export const notifyFiveBookmarksReached = async () => {
   const allowed = await initializeNotifications();
   if (!allowed) return;
 
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return;
+
   await Notifications.scheduleNotificationAsync({
     content: {
       title: "Great job!",
@@ -50,6 +66,9 @@ export const notifyFiveBookmarksReached = async () => {
 export const scheduleBookmarkReminderAfter24Hours = async () => {
   const allowed = await initializeNotifications();
   if (!allowed) return;
+
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return;
 
   const oldReminderId = await AsyncStorage.getItem(BOOKMARK_REMINDER_ID_KEY);
   if (oldReminderId) {
@@ -80,9 +99,12 @@ export const clearIncompleteCourseReminder = async (courseId: string) => {
   const reminderId = await AsyncStorage.getItem(reminderKey);
   if (!reminderId) return;
 
-  try {
-    await Notifications.cancelScheduledNotificationAsync(reminderId);
-  } catch {}
+  const Notifications = await getNotificationsModule();
+  if (Notifications) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(reminderId);
+    } catch {}
+  }
 
   await AsyncStorage.removeItem(reminderKey);
 };
@@ -93,6 +115,9 @@ export const scheduleIncompleteCourseReminder = async (
 ) => {
   const allowed = await initializeNotifications();
   if (!allowed) return;
+
+  const Notifications = await getNotificationsModule();
+  if (!Notifications) return;
 
   await clearIncompleteCourseReminder(courseId);
 
